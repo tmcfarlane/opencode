@@ -1,0 +1,221 @@
+# Cursor Provider Definition for models.dev
+# This file defines the Cursor provider for contribution to https://github.com/sst/models.dev
+#
+# Cursor is a built-in OpenCode provider that uses the cursor-agent CLI
+# to access Cursor's AI models through a local proxy server.
+#
+# Usage: Submit this file to models.dev to make Cursor available in the public provider database
+# After acceptance, OpenCode can remove the hardcoded provider injection in provider.ts
+
+id = "cursor"
+name = "Cursor Agent"
+api = "http://localhost:32123/v1"
+env = []
+
+# Model: auto (Automatic model selection)
+[[models]]
+id = "auto"
+name = "Cursor Auto"
+attachment = true
+reasoning = false
+temperature = true
+tool_call = true
+modalities.input = ["text", "image"]
+modalities.output = ["text"]
+limit.context = 200000
+limit.output = 16384
+cost.input = 0.0
+cost.output = 0.0
+release_date = "2025-01-01"
+
+# Model: GPT-5.2
+[[models]]
+id = "gpt-5.2"
+name = "GPT-5.2"
+attachment = true
+reasoning = false
+temperature = true
+tool_call = true
+modalities.input = ["text", "image"]
+modalities.output = ["text"]
+limit.context = 272000
+limit.output = 16384
+cost.input = 0.0
+cost.output = 0.0
+release_date = "2025-01-01"
+
+# Model: GPT-5.2 Codex
+[[models]]
+id = "gpt-5.2-codex"
+name = "GPT-5.2 Codex"
+attachment = true
+reasoning = false
+temperature = true
+tool_call = true
+modalities.input = ["text", "image"]
+modalities.output = ["text"]
+limit.context = 272000
+limit.output = 16384
+cost.input = 0.0
+cost.output = 0.0
+release_date = "2025-01-01"
+
+# Model: GPT-5.1
+[[models]]
+id = "gpt-5.1"
+name = "GPT-5.1"
+attachment = true
+reasoning = false
+temperature = true
+tool_call = true
+modalities.input = ["text", "image"]
+modalities.output = ["text"]
+limit.context = 200000
+limit.output = 16384
+cost.input = 0.0
+cost.output = 0.0
+release_date = "2024-11-01"
+
+# Model: GPT-5.1 Codex
+[[models]]
+id = "gpt-5.1-codex"
+name = "GPT-5.1 Codex"
+attachment = true
+reasoning = false
+temperature = true
+tool_call = true
+modalities.input = ["text", "image"]
+modalities.output = ["text"]
+limit.context = 200000
+limit.output = 16384
+cost.input = 0.0
+cost.output = 0.0
+release_date = "2024-11-01"
+
+# Model: Claude Sonnet 4.5
+[[models]]
+id = "sonnet-4.5"
+name = "Claude Sonnet 4.5"
+attachment = true
+reasoning = false
+temperature = true
+tool_call = true
+modalities.input = ["text", "image"]
+modalities.output = ["text"]
+limit.context = 200000
+limit.output = 16384
+cost.input = 0.0
+cost.output = 0.0
+release_date = "2025-01-01"
+
+# Model: Claude Sonnet 4.5 Thinking
+[[models]]
+id = "sonnet-4.5-thinking"
+name = "Claude Sonnet 4.5 (Thinking)"
+attachment = true
+reasoning = true
+temperature = true
+tool_call = true
+modalities.input = ["text", "image"]
+modalities.output = ["text"]
+limit.context = 200000
+limit.output = 16384
+cost.input = 0.0
+cost.output = 0.0
+release_date = "2025-01-01"
+
+# Model: Claude Opus 4.5
+[[models]]
+id = "opus-4.5"
+name = "Claude Opus 4.5"
+attachment = true
+reasoning = false
+temperature = true
+tool_call = true
+modalities.input = ["text", "image"]
+modalities.output = ["text"]
+limit.context = 200000
+limit.output = 16384
+cost.input = 0.0
+cost.output = 0.0
+release_date = "2025-01-01"
+
+# Model: Claude Opus 4.5 Thinking
+[[models]]
+id = "opus-4.5-thinking"
+name = "Claude Opus 4.5 (Thinking)"
+attachment = true
+reasoning = true
+temperature = true
+tool_call = true
+modalities.input = ["text", "image"]
+modalities.output = ["text"]
+limit.context = 200000
+limit.output = 16384
+cost.input = 0.0
+cost.output = 0.0
+release_date = "2025-01-01"
+
+# Model: Gemini 3 Pro
+[[models]]
+id = "gemini-3-pro"
+name = "Gemini 3 Pro"
+attachment = true
+reasoning = false
+temperature = true
+tool_call = true
+modalities.input = ["text", "image"]
+modalities.output = ["text"]
+limit.context = 200000
+limit.output = 16384
+cost.input = 0.0
+cost.output = 0.0
+release_date = "2025-01-01"
+
+# Model: Gemini 3 Flash
+[[models]]
+id = "gemini-3-flash"
+name = "Gemini 3 Flash"
+attachment = true
+reasoning = false
+temperature = true
+tool_call = true
+modalities.input = ["text", "image"]
+modalities.output = ["text"]
+limit.context = 200000
+limit.output = 16384
+cost.input = 0.0
+cost.output = 0.0
+release_date = "2025-01-01"
+
+# Model: Composer 1
+[[models]]
+id = "composer-1"
+name = "Composer 1"
+attachment = true
+reasoning = false
+temperature = true
+tool_call = true
+modalities.input = ["text", "image"]
+modalities.output = ["text"]
+limit.context = 200000
+limit.output = 16384
+cost.input = 0.0
+cost.output = 0.0
+release_date = "2025-01-01"
+
+# Model: Grok
+[[models]]
+id = "grok"
+name = "Grok"
+attachment = true
+reasoning = false
+temperature = true
+tool_call = true
+modalities.input = ["text", "image"]
+modalities.output = ["text"]
+limit.context = 256000
+limit.output = 16384
+cost.input = 0.0
+cost.output = 0.0
+release_date = "2025-01-01"

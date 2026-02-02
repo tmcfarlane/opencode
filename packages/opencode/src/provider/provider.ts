@@ -97,6 +97,12 @@ export namespace Provider {
         },
       }
     },
+    cursor: async () => {
+      return {
+        autoload: false,
+        options: {},
+      }
+    },
     async opencode(input) {
       const hasKey = await (async () => {
         const env = Env.all()
@@ -621,13 +627,13 @@ export namespace Provider {
         },
         experimentalOver200K: model.cost?.context_over_200k
           ? {
-              cache: {
-                read: model.cost.context_over_200k.cache_read ?? 0,
-                write: model.cost.context_over_200k.cache_write ?? 0,
-              },
-              input: model.cost.context_over_200k.input,
-              output: model.cost.context_over_200k.output,
-            }
+            cache: {
+              read: model.cost.context_over_200k.cache_read ?? 0,
+              write: model.cost.context_over_200k.cache_write ?? 0,
+            },
+            input: model.cost.context_over_200k.input,
+            output: model.cost.context_over_200k.output,
+          }
           : undefined,
       },
       limit: {
@@ -680,7 +686,7 @@ export namespace Provider {
     using _ = log.time("state")
     const config = await Config.get()
     const modelsDev = await ModelsDev.get()
-    const database = mapValues(modelsDev, fromModelsDevProvider)
+    const database: Record<string, Info> = mapValues(modelsDev, fromModelsDevProvider)
 
     const disabled = new Set(config.disabled_providers ?? [])
     const enabled = config.enabled_providers ? new Set(config.enabled_providers) : null
@@ -715,6 +721,44 @@ export namespace Provider {
         })),
       }
     }
+
+    // Add Cursor provider (built-in plugin with dynamic model discovery)
+    const cursorProviderRaw: ModelsDev.Provider = {
+      id: "cursor",
+      name: "Cursor Agent",
+      api: "http://localhost:32123/v1",
+      npm: "@ai-sdk/openai-compatible",
+      env: [],
+      models: {
+        auto: {
+          id: "auto",
+          name: "Cursor Auto",
+          family: "",
+          release_date: "2025-01-01",
+          attachment: true,
+          reasoning: false,
+          temperature: true,
+          tool_call: true,
+          cost: {
+            input: 0,
+            output: 0,
+            cache_read: 0,
+            cache_write: 0,
+          },
+          limit: {
+            context: 200000,
+            output: 16384,
+          },
+          modalities: {
+            input: ["text", "image"],
+            output: ["text"],
+          },
+          options: {},
+          headers: {},
+        },
+      },
+    }
+    database["cursor"] = fromModelsDevProvider(cursorProviderRaw)
 
     function mergeProvider(providerID: string, provider: Partial<Info>) {
       const existing = providers[providerID]

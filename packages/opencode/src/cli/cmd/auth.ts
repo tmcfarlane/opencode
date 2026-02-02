@@ -164,7 +164,7 @@ export const AuthCommand = cmd({
   describe: "manage credentials",
   builder: (yargs) =>
     yargs.command(AuthLoginCommand).command(AuthLogoutCommand).command(AuthListCommand).demandCommand(),
-  async handler() {},
+  async handler() { },
 })
 
 export const AuthListCommand = cmd({
@@ -251,7 +251,7 @@ export const AuthLoginCommand = cmd({
           prompts.outro("Done")
           return
         }
-        await ModelsDev.refresh().catch(() => {})
+        await ModelsDev.refresh().catch(() => { })
 
         const config = await Config.get()
 
@@ -268,14 +268,43 @@ export const AuthLoginCommand = cmd({
           return filtered
         })
 
+        // Built-in provider: Cursor (auth handled by built-in plugin)
+        if ((enabled ? enabled.has("cursor") : true) && !disabled.has("cursor")) {
+          providers["cursor"] = {
+            id: "cursor",
+            name: "Cursor Agent",
+            env: [],
+            api: "http://localhost:32123/v1",
+            npm: "@ai-sdk/openai-compatible",
+            models: {
+              auto: {
+                id: "auto",
+                name: "Cursor Auto",
+                family: "cursor",
+                release_date: "2025-01-01",
+                attachment: true,
+                reasoning: false,
+                temperature: true,
+                tool_call: true,
+                limit: { context: 200000, output: 16384 },
+                modalities: { input: ["text", "image"], output: ["text"] },
+                cost: { input: 0, output: 0, cache_read: 0, cache_write: 0 },
+                options: {},
+                headers: {},
+              },
+            },
+          }
+        }
+
         const priority: Record<string, number> = {
           opencode: 0,
           anthropic: 1,
-          "github-copilot": 2,
+          "github-copilot": 7,
           openai: 3,
           google: 4,
           openrouter: 5,
           vercel: 6,
+          cursor: 2,
         }
         let provider = await prompts.autocomplete({
           message: "Select provider",
@@ -337,10 +366,10 @@ export const AuthLoginCommand = cmd({
         if (provider === "amazon-bedrock") {
           prompts.log.info(
             "Amazon Bedrock authentication priority:\n" +
-              "  1. Bearer token (AWS_BEARER_TOKEN_BEDROCK or /connect)\n" +
-              "  2. AWS credential chain (profile, access keys, IAM roles, EKS IRSA)\n\n" +
-              "Configure via opencode.json options (profile, region, endpoint) or\n" +
-              "AWS environment variables (AWS_PROFILE, AWS_REGION, AWS_ACCESS_KEY_ID, AWS_WEB_IDENTITY_TOKEN_FILE).",
+            "  1. Bearer token (AWS_BEARER_TOKEN_BEDROCK or /connect)\n" +
+            "  2. AWS credential chain (profile, access keys, IAM roles, EKS IRSA)\n\n" +
+            "Configure via opencode.json options (profile, region, endpoint) or\n" +
+            "AWS environment variables (AWS_PROFILE, AWS_REGION, AWS_ACCESS_KEY_ID, AWS_WEB_IDENTITY_TOKEN_FILE).",
           )
         }
 
