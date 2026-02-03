@@ -1,0 +1,118 @@
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+main {
+  flex: 1;
+  padding: 48px 0;
+}
+
+section {
+  margin-bottom: 96px;
+}
+
+section:last-child {
+  margin-bottom: 48px;
+}
+
+h2 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--color-text-strong);
+  margin-bottom: 16px;
+  letter-spacing: -0.02em;
+}
+
+h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text-strong);
+  margin-bottom: 12px;
+  margin-top: 32px;
+}
+
+h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text-strong);
+  margin-bottom: 8px;
+  margin-top: 24px;
+}
+
+p {
+  margin-bottom: 16px;
+  color: var(--color-text);
+  font-size: 1rem;
+}
+
+ul, ol {
+  margin-left: 24px;
+  margin-bottom: 16px;
+}
+
+li {
+  margin-bottom: 8px;
+  color: var(--color-text);
+}
+
+.footer {
+  background-color: var(--color-bg-weak);
+  border-top: 1px solid var(--color-border);
+  padding: 32px 0;
+  margin-top: 96px;
+  text-align: center;
+}
+
+.footer p {
+  margin: 0;
+  color: var(--color-text-weak);
+}
+
+.card {
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  transition: box-shadow 0.2s ease;
+}
+
+.card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-right: 8px;
+  margin-bottom: 8px;
+}
+
+.badge-success {
+  background-color: hsla(142, 71%, 45%, 0.1);
+  color: var(--color-success);
+  border: 1px solid var(--color-success);
+}
+
+.badge-warning {
+  background-color: hsla(38, 92%, 50%, 0.1);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning);
+}
+
+.badge-error {
+  background-color: hsla(0, 72%, 51%, 0.1);
+  color: var(--color-error);
+  border: 1px solid var(--color-error);
+}
+
+.badge-info {
+  background-color: hsla(207, 90%, 54%, 0.1);
+  color: hsl(207, 90%, 54%);
+  border: 1px solid hsl(207, 90%, 54%);
+}

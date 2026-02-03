@@ -821,6 +821,20 @@ Some models need to be manually enabled in your [GitHub Copilot settings](https:
 
 ---
 
+### Cursor Agent
+
+To use Cursor CLI headless with OpenCode:
+
+1. Install Cursor CLI.
+2. Prefer the login flow: run `/connect` and select **Cursor Agent**.
+3. Run `/models` and pick a `cursor/*` model.
+
+If you want non-interactive/headless scripting, OpenCode can use the `agent` binary once you are authenticated. `CURSOR_API_KEY` also works for automation.
+
+OpenCode prefers the `agent` binary for headless mode and falls back to `cursor-agent` when needed.
+
+---
+
 ### Google Vertex AI
 
 To use Google Vertex AI with OpenCode:

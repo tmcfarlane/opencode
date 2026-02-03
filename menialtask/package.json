@@ -1,0 +1,8 @@
+{
+  "name": "menialtask",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot src/index.ts"
+  }
+}

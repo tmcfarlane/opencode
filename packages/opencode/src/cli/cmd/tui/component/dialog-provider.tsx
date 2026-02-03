@@ -26,6 +26,7 @@ export function createDialogProviderOptions() {
   const sync = useSync()
   const dialog = useDialog()
   const sdk = useSDK()
+  const toast = useToast()
   const connected = createMemo(() => new Set(sync.data.provider_next.connected))
   const options = createMemo(() => {
     return pipe(
@@ -75,6 +76,23 @@ export function createDialogProviderOptions() {
                 providerID: provider.id,
                 method: index,
               })
+              if (result.error) {
+                const err = result.error as any
+                toast.show({
+                  variant: "error",
+                  message: err?.data?.message ?? err?.message ?? "Failed to start authorization",
+                })
+                dialog.clear()
+                return
+              }
+              if (!result.data) {
+                toast.show({
+                  variant: "error",
+                  message: "Failed to start authorization",
+                })
+                dialog.clear()
+                return
+              }
               if (result.data?.method === "code") {
                 dialog.replace(() => (
                   <CodeMethod
@@ -140,6 +158,11 @@ function AutoMethod(props: AutoMethodProps) {
       method: props.index,
     })
     if (result.error) {
+      const err = result.error as any
+      toast.show({
+        variant: "error",
+        message: err?.data?.message ?? err?.message ?? "Authorization failed",
+      })
       dialog.clear()
       return
     }

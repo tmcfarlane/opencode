@@ -1,0 +1,80 @@
+.flow-comparison {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 32px;
+  margin: 32px 0;
+}
+
+.flow-card {
+  padding: 24px;
+  background-color: var(--color-bg-weak);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+}
+
+.flow-card h3 {
+  margin-top: 0;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--color-border);
+}
+
+.flow-steps {
+  display: flex;
+  flex-direction: column;
+}
+
+.flow-step {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 16px;
+  background-color: var(--color-bg);
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}
+
+.flow-step-number {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  background-color: var(--color-bg-interactive);
+  color: var(--color-text-strong);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.875rem;
+}
+
+.flow-step-content {
+  flex: 1;
+}
+
+.flow-step-content strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--color-text-strong);
+  font-size: 0.9375rem;
+}
+
+.flow-step-content p {
+  margin: 0;
+  color: var(--color-text-weak);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.flow-arrow {
+  text-align: center;
+  color: var(--color-text-weak);
+  font-size: 1.5rem;
+  padding: 8px 0;
+}
+
+@media (max-width: 768px) {
+  .flow-comparison {
+    grid-template-columns: 1fr;
+  }
+}

@@ -20,7 +20,35 @@ describe("plugin.cursor", () => {
         // Verify the cursor-agent CLI login method exists
         const browserMethod = cursor.find((m) => m.label === "Login via cursor-agent (opens browser)")
         expect(browserMethod).toBeDefined()
-        expect(browserMethod?.type).toBe("api")
+        expect(browserMethod?.type).toBe("oauth")
+      },
+    })
+  }, 30000)
+
+  test("cursor auth method surfaces error when cursor-agent is missing", async () => {
+    await using tmp = await tmpdir()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const plugins = await Plugin.list()
+        const cursorPlugin = plugins.find((p) => p.auth?.provider === "cursor")
+        expect(cursorPlugin).toBeDefined()
+
+        const method = cursorPlugin!.auth!.methods.find((m) => m.label === "Login via cursor-agent (opens browser)")
+        expect(method).toBeDefined()
+        expect(method!.type).toBe("oauth")
+        if (!method?.authorize) {
+          throw new Error("cursor auth method missing authorize")
+        }
+
+        const prev = process.env.PATH
+        process.env.PATH = ""
+        try {
+          await expect(method.authorize()).rejects.toThrow(/CursorAgentMissingError/)
+        } finally {
+          process.env.PATH = prev
+        }
       },
     })
   }, 30000)

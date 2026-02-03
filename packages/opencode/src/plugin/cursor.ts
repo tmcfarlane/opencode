@@ -1,5 +1,7 @@
 import type { Hooks, PluginInput } from "@opencode-ai/plugin"
 import { Log } from "../util/log"
+import { NamedError } from "@opencode-ai/util/error"
+import z from "zod"
 
 const log = Log.create({ service: "plugin.cursor" })
 
@@ -7,6 +9,13 @@ const CURSOR_PROVIDER_ID = "cursor"
 const CURSOR_PROXY_HOST = "127.0.0.1"
 const CURSOR_PROXY_DEFAULT_PORT = 32123
 const CURSOR_PROXY_DEFAULT_BASE_URL = `http://${CURSOR_PROXY_HOST}:${CURSOR_PROXY_DEFAULT_PORT}/v1`
+
+const CursorAgentMissingError = NamedError.create(
+  "CursorAgentMissingError",
+  z.object({
+    message: z.string(),
+  }),
+)
 
 type CursorModel = {
   id: string
@@ -48,6 +57,91 @@ type ToolDef = {
 type ToolCallPlan =
   | { action: "final"; content: string }
   | { action: "tool_call"; tool_calls: Array<{ name: string; arguments: any }> }
+
+type HeadlessStreamEvent = {
+  type?: string
+  subtype?: string
+  message?: {
+    content?: Array<{
+      text?: string
+    }>
+  }
+  result?: unknown
+}
+
+export function parseHeadlessJsonResult(text: string): string {
+  const trimmed = (text ?? "").trim()
+  if (!trimmed) return ""
+  try {
+    const parsed = JSON.parse(trimmed)
+    if (typeof parsed === "string") return parsed
+    if (parsed && typeof parsed === "object") {
+      const result = (parsed as any).result
+      if (typeof result === "string") return result
+      if (result && typeof result === "object") return JSON.stringify(result)
+    }
+  } catch {
+    // ignore
+  }
+  return trimmed
+}
+
+export function extractHeadlessAssistantText(line: string): string | null {
+  const trimmed = line.trim()
+  if (!trimmed) return null
+  let parsed: HeadlessStreamEvent
+  try {
+    parsed = JSON.parse(trimmed)
+  } catch {
+    return null
+  }
+
+  if (parsed?.type !== "assistant") return null
+
+  const text = parsed.message?.content?.[0]?.text
+  if (typeof text !== "string" || !text) return null
+  return text
+}
+
+export function mergeHeadlessText(prev: string, next: string): { text: string; delta: string } {
+  if (!next) return { text: prev, delta: "" }
+  if (next.startsWith(prev)) {
+    const delta = next.slice(prev.length)
+    return { text: next, delta }
+  }
+  return { text: prev + next, delta: next }
+}
+
+async function isHeadlessAgentAvailable($: any) {
+  const v = await $`agent -v`
+    .quiet()
+    .nothrow()
+    .catch(() => null)
+  if (v && v.exitCode === 0) return true
+  const version = await $`agent --version`
+    .quiet()
+    .nothrow()
+    .catch(() => null)
+  return version?.exitCode === 0
+}
+
+async function isHeadlessAgentLoggedIn($: any) {
+  const whoami = await $`agent whoami`
+    .quiet()
+    .nothrow()
+    .catch(() => null)
+  if (!whoami || whoami.exitCode !== 0) return false
+  return !whoami.text().includes("Not logged in")
+}
+
+async function isCursorAgentLoggedIn($: any) {
+  const whoami = await $`cursor-agent whoami`
+    .quiet()
+    .nothrow()
+    .catch(() => null)
+  if (!whoami || whoami.exitCode !== 0) return false
+  return !whoami.text().includes("Not logged in")
+}
 
 function openAIError(status: number, message: string, details?: string): Response {
   const body = {
@@ -272,12 +366,18 @@ async function listCursorModels($: any): Promise<CursorModel[]> {
     }
   }
 
-  // Try cursor-agent models command first (newer CLI) with timeout
+  // Prefer headless `agent` when it can authenticate.
+  const hasKey = typeof Bun.env.CURSOR_API_KEY === "string" && Bun.env.CURSOR_API_KEY.length > 0
+  const preferHeadless = hasKey || (await isHeadlessAgentLoggedIn($))
+
+  // Try models command first (with timeout)
   try {
     const result = await Promise.race([
-      $`agent models --list-models`.quiet().nothrow(),
+      preferHeadless
+        ? $`agent models --list-models`.quiet().nothrow()
+        : $`cursor-agent models --list-models`.quiet().nothrow(),
       new Promise<{ exitCode: number; text: () => string }>((_, reject) =>
-        setTimeout(() => reject(new Error("timeout")), 3000)
+        setTimeout(() => reject(new Error("timeout")), 3000),
       ),
     ])
     if (result.exitCode === 0) {
@@ -307,7 +407,10 @@ async function listCursorModels($: any): Promise<CursorModel[]> {
           }
         } catch {
           // Not JSON, try parsing as plain text list
-          const lines = output.split("\n").map((l: string) => l.trim()).filter(Boolean)
+          const lines = output
+            .split("\n")
+            .map((l: string) => l.trim())
+            .filter(Boolean)
           for (const line of lines) add(parseModelLine(line))
         }
       }
@@ -316,13 +419,64 @@ async function listCursorModels($: any): Promise<CursorModel[]> {
     // Ignore errors, try fallback
   }
 
+  // Fallback to the other binary (with timeout)
+  if (models.size === 0) {
+    try {
+      const result = await Promise.race([
+        preferHeadless
+          ? $`cursor-agent models --list-models`.quiet().nothrow()
+          : $`agent models --list-models`.quiet().nothrow(),
+        new Promise<{ exitCode: number; text: () => string }>((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), 3000),
+        ),
+      ])
+      if (result.exitCode === 0) {
+        const output = result.text().trim()
+        if (output) {
+          // Try parsing as JSON first
+          try {
+            const parsed = JSON.parse(output)
+            if (Array.isArray(parsed)) {
+              for (const item of parsed) {
+                if (typeof item === "string") add(parseModelLine(item))
+                if (item && typeof item === "object") {
+                  const id = typeof (item as any).id === "string" ? (item as any).id : undefined
+                  const name = typeof (item as any).name === "string" ? (item as any).name : undefined
+                  if (id) add({ id, displayName: name || id, isThinking: id.includes("thinking") })
+                }
+              }
+            } else if (parsed && Array.isArray((parsed as any).models)) {
+              for (const item of (parsed as any).models) {
+                if (typeof item === "string") add(parseModelLine(item))
+                if (item && typeof item === "object") {
+                  const id = typeof (item as any).id === "string" ? (item as any).id : undefined
+                  const name = typeof (item as any).name === "string" ? (item as any).name : undefined
+                  if (id) add({ id, displayName: name || id, isThinking: id.includes("thinking") })
+                }
+              }
+            }
+          } catch {
+            // Not JSON, try parsing as plain text list
+            const lines = output
+              .split("\n")
+              .map((l: string) => l.trim())
+              .filter(Boolean)
+            for (const line of lines) add(parseModelLine(line))
+          }
+        }
+      }
+    } catch {
+      // Ignore errors
+    }
+  }
+
   // Fallback to cursor-agent if no models found (with timeout)
   if (models.size === 0) {
     try {
       const result = await Promise.race([
-        $`cursor-agent --list-models`.quiet().nothrow(),
+        preferHeadless ? $`agent --list-models`.quiet().nothrow() : $`cursor-agent --list-models`.quiet().nothrow(),
         new Promise<{ exitCode: number; text: () => string }>((_, reject) =>
-          setTimeout(() => reject(new Error("timeout")), 3000)
+          setTimeout(() => reject(new Error("timeout")), 3000),
         ),
       ])
       if (result.exitCode === 0) {
@@ -341,7 +495,48 @@ async function listCursorModels($: any): Promise<CursorModel[]> {
               }
             }
           } catch {
-            const lines = output.split("\n").map((l: string) => l.trim()).filter(Boolean)
+            const lines = output
+              .split("\n")
+              .map((l: string) => l.trim())
+              .filter(Boolean)
+            for (const line of lines) add(parseModelLine(line))
+          }
+        }
+      }
+    } catch {
+      // Ignore errors
+    }
+  }
+
+  // Last fallback to legacy name
+  if (models.size === 0) {
+    try {
+      const result = await Promise.race([
+        preferHeadless ? $`cursor-agent --list-models`.quiet().nothrow() : $`agent --list-models`.quiet().nothrow(),
+        new Promise<{ exitCode: number; text: () => string }>((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), 3000),
+        ),
+      ])
+      if (result.exitCode === 0) {
+        const output = result.text().trim()
+        if (output) {
+          try {
+            const parsed = JSON.parse(output)
+            if (Array.isArray(parsed)) {
+              for (const item of parsed) {
+                if (typeof item === "string") add(parseModelLine(item))
+                if (item && typeof item === "object") {
+                  const id = typeof (item as any).id === "string" ? (item as any).id : undefined
+                  const name = typeof (item as any).name === "string" ? (item as any).name : undefined
+                  if (id) add({ id, displayName: name || id, isThinking: id.includes("thinking") })
+                }
+              }
+            }
+          } catch {
+            const lines = output
+              .split("\n")
+              .map((l: string) => l.trim())
+              .filter(Boolean)
             for (const line of lines) add(parseModelLine(line))
           }
         }
@@ -417,6 +612,15 @@ async function ensureCursorProxyServer(workspaceDirectory: string): Promise<stri
       const { prompt, model, stream, tools } = extractPromptFromChatCompletions(body)
       let selectedModel = normalizeCursorAgentModel(model)
 
+      // Prefer headless `agent` when it can authenticate.
+      const hasKey = typeof Bun.env.CURSOR_API_KEY === "string" && Bun.env.CURSOR_API_KEY.length > 0
+      const headless =
+        (await isHeadlessAgentAvailable(Bun.$)) && (hasKey || (await isHeadlessAgentLoggedIn(Bun.$)))
+          ? true
+          : (await isCursorAgentLoggedIn(Bun.$))
+            ? false
+            : await isHeadlessAgentAvailable(Bun.$)
+
       // When tool-calling is enabled and model is "auto", pick a strict model
       if (tools.length && selectedModel === "auto") {
         selectedModel = "sonnet-4.5-thinking"
@@ -424,23 +628,35 @@ async function ensureCursorProxyServer(workspaceDirectory: string): Promise<stri
 
       const effectivePrompt = tools.length ? buildToolCallingPrompt(prompt, tools, workspaceDirectory) : prompt
 
-      const cmd = [
-        "cursor-agent",
-        "--print",
-        "--output-format",
-        "text",
-        "--workspace",
-        workspaceDirectory,
-        "--model",
-        selectedModel,
-        effectivePrompt,
-      ]
+      const cmd = headless
+        ? [
+            "agent",
+            "-p",
+            "--output-format",
+            stream && tools.length === 0 ? "stream-json" : "json",
+            ...(stream && tools.length === 0 ? ["--stream-partial-output"] : []),
+            "--model",
+            selectedModel,
+            effectivePrompt,
+          ]
+        : [
+            "cursor-agent",
+            "--print",
+            "--output-format",
+            "text",
+            "--workspace",
+            workspaceDirectory,
+            "--model",
+            selectedModel,
+            effectivePrompt,
+          ]
 
       const child = Bun.spawn({
         cmd,
         stdout: "pipe",
         stderr: "pipe",
         env: Bun.env,
+        ...(headless ? { cwd: workspaceDirectory } : {}),
       })
 
       if (!stream) {
@@ -449,7 +665,7 @@ async function ensureCursorProxyServer(workspaceDirectory: string): Promise<stri
           new Response(child.stderr).text(),
         ])
 
-        const stdout = (stdoutText || "").trim()
+        const stdout = headless ? parseHeadlessJsonResult(stdoutText || "") : (stdoutText || "").trim()
         const stderr = (stderrText || "").trim()
 
         // If tools were requested and we can parse a plan, treat it as success even if exitCode != 0
@@ -540,7 +756,7 @@ async function ensureCursorProxyServer(workspaceDirectory: string): Promise<stri
                 clearInterval(interval)
               })
 
-              const stdout = (stdoutText || "").trim()
+              const stdout = headless ? parseHeadlessJsonResult(stdoutText || "") : (stdoutText || "").trim()
               const stderr = (stderrText || "").trim()
 
               const plan = parseToolCallPlan(stdout)
@@ -593,19 +809,65 @@ async function ensureCursorProxyServer(workspaceDirectory: string): Promise<stri
               return
             }
 
-            // No tools: stream stdout as text deltas
-            const decoder = new TextDecoder()
-            const reader = (child.stdout as ReadableStream<Uint8Array>).getReader()
+            // No tools:
+            // - headless: parse stream-json events and emit deltas
+            // - legacy: stream stdout as raw text
+            if (headless) {
+              const decoder = new TextDecoder()
+              const reader = (child.stdout as ReadableStream<Uint8Array>).getReader()
 
-            while (true) {
-              const { value, done } = await reader.read()
-              if (done) break
-              if (!value || value.length === 0) continue
-              const text = decoder.decode(value, { stream: true })
-              if (!text) continue
+              let buffer = ""
+              let text = ""
 
-              const chunk = createChatCompletionChunk(id, created, selectedModel, text, false)
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`))
+              while (true) {
+                const { value, done } = await reader.read()
+                if (done) break
+                if (!value || value.length === 0) continue
+
+                buffer += decoder.decode(value, { stream: true })
+
+                while (true) {
+                  const idx = buffer.indexOf("\n")
+                  if (idx === -1) break
+                  const line = buffer.slice(0, idx)
+                  buffer = buffer.slice(idx + 1)
+
+                  const part = extractHeadlessAssistantText(line)
+                  if (!part) continue
+
+                  const merged = mergeHeadlessText(text, part)
+                  text = merged.text
+                  if (!merged.delta) continue
+
+                  const chunk = createChatCompletionChunk(id, created, selectedModel, merged.delta, false)
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`))
+                }
+              }
+
+              // Flush any trailing line (best effort)
+              const tail = extractHeadlessAssistantText(buffer)
+              if (tail) {
+                const merged = mergeHeadlessText(text, tail)
+                text = merged.text
+                if (merged.delta) {
+                  const chunk = createChatCompletionChunk(id, created, selectedModel, merged.delta, false)
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`))
+                }
+              }
+            } else {
+              const decoder = new TextDecoder()
+              const reader = (child.stdout as ReadableStream<Uint8Array>).getReader()
+
+              while (true) {
+                const { value, done } = await reader.read()
+                if (done) break
+                if (!value || value.length === 0) continue
+                const text = decoder.decode(value, { stream: true })
+                if (!text) continue
+
+                const chunk = createChatCompletionChunk(id, created, selectedModel, text, false)
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`))
+              }
             }
 
             if (child.exitCode !== 0) {
@@ -694,8 +956,8 @@ async function ensureCursorProxyServer(workspaceDirectory: string): Promise<stri
 
 async function checkCursorAgentAvailable($: any): Promise<boolean> {
   try {
-    const result = await $`cursor-agent --version`.quiet().nothrow()
-    return result.exitCode === 0
+    const cursorAgent = await $`cursor-agent --version`.quiet().nothrow()
+    return cursorAgent.exitCode === 0
   } catch {
     return false
   }
@@ -791,28 +1053,50 @@ export async function CursorAuthPlugin(input: PluginInput): Promise<Hooks> {
       methods: [
         {
           label: "Login via cursor-agent (opens browser)",
-          type: "api",
+          type: "oauth",
           authorize: async () => {
             const isAvailable = await checkCursorAgentAvailable(input.$)
             if (!isAvailable) {
               log.error("cursor-agent binary not found")
-              return { type: "failed" as const }
-            }
-
-            const whoami = await input.$`cursor-agent whoami`.quiet().nothrow()
-            const whoamiText = whoami.text()
-            if (whoamiText.includes("Not logged in")) {
-              log.info("cursor-agent not logged in, initiating login flow")
-              const login = await input.$`cursor-agent login`.nothrow()
-              if (login.exitCode !== 0) {
-                log.error("cursor-agent login failed")
-                return { type: "failed" as const }
-              }
+              throw new CursorAgentMissingError({
+                message:
+                  "cursor-agent is not installed (or not on PATH). Install Cursor, then run `cursor-agent login` and try again.",
+              })
             }
 
             return {
-              type: "success" as const,
-              key: "cursor-agent",
+              url: "https://cursor.com",
+              instructions:
+                "A browser window should open to sign into Cursor. We'll continue automatically once you're logged in.",
+              method: "auto" as const,
+              async callback() {
+                const whoami = await input.$`cursor-agent whoami`.quiet().nothrow()
+                const whoamiText = whoami.text()
+                if (!whoamiText.includes("Not logged in")) {
+                  return {
+                    type: "success" as const,
+                    key: "cursor-agent",
+                  }
+                }
+
+                log.info("cursor-agent not logged in, initiating login flow")
+                const login = await input.$`cursor-agent login`.nothrow()
+                if (login.exitCode !== 0) {
+                  log.error("cursor-agent login failed")
+                  return { type: "failed" as const }
+                }
+
+                const verify = await input.$`cursor-agent whoami`.quiet().nothrow()
+                const verifyText = verify.text()
+                if (verifyText.includes("Not logged in")) {
+                  return { type: "failed" as const }
+                }
+
+                return {
+                  type: "success" as const,
+                  key: "cursor-agent",
+                }
+              },
             }
           },
         },

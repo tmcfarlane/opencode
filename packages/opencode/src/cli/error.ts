@@ -4,7 +4,19 @@ import { MCP } from "../mcp"
 import { Provider } from "../provider/provider"
 import { UI } from "./ui"
 
+function isNamedMessage(input: unknown): input is { name: string; data: { message: string } } {
+  if (typeof input !== "object" || input === null) return false
+  if (!("name" in input)) return false
+  if (!("data" in input)) return false
+  const data = (input as Record<string, unknown>).data
+  if (typeof data !== "object" || data === null) return false
+  return typeof (data as Record<string, unknown>).message === "string"
+}
+
 export function FormatError(input: unknown) {
+  if (isNamedMessage(input) && input.name === "CursorAgentMissingError") {
+    return input.data.message
+  }
   if (MCP.Failed.isInstance(input))
     return `MCP server "${input.data.name}" failed. Note, opencode does not support MCP authentication yet.`
   if (Provider.ModelNotFoundError.isInstance(input)) {
